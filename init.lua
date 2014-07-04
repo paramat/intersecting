@@ -1,4 +1,4 @@
--- intersecting 0.2.0 by paramat
+-- intersecting 0.2.1 by paramat
 -- For latest stable Minetest and back to 0.4.8
 -- Depends default
 -- License: code WTFPL
@@ -81,6 +81,8 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	local c_sand = minetest.get_content_id("default:sand")
 	local c_dirt = minetest.get_content_id("default:dirt")
 	local c_grass = minetest.get_content_id("default:dirt_with_grass")
+	local c_tree = minetest.get_content_id("default:tree")
+	local c_jtree = minetest.get_content_id("default:jungletree")
 	
 	local sidelen = x1 - x0 + 1
 	local chulens = {x=sidelen, y=sidelen, z=sidelen}
@@ -99,10 +101,10 @@ minetest.register_on_generated(function(minp, maxp, seed)
 			local via = area:index(x0, y+1, z)
 			local vin = area:index(x0, y, z+1)
 			local vis = area:index(x0, y, z-1)
+			local vie = vi + 1
+			local viw = vi - 1
 			for x = x0, x1 do -- for each node do
 				local ti = x - x0 + 1
-				local vie = vi + 1
-				local viw = vi - 1
 				local nodid = data[vi]
 				local nodida = data[via]
 				local nodide = data[vie]
@@ -115,27 +117,43 @@ minetest.register_on_generated(function(minp, maxp, seed)
 					local weba = math.abs(nvals_weba[nixyz]) < TFIS
 					local webb = math.abs(nvals_webb[nixyz]) < TFIS
 					local webc = math.abs(nvals_webc[nixyz]) < TFIS
-					local n_biome = math.abs(nvals_biome[nixyz])
+					local n_biome = nvals_biome[nixyz]
 					local void
-					if n_biome < 0.1 then -- 2 fis
+					if n_biome < -0.65 then -- 2 tun ac ab
+						void = (weba and webc) or (weba and webb) 
+					elseif n_biome < -0.4 then -- 2 tun bc ab
+						void = (webb and webc) or (weba and webb)
+					elseif n_biome < -0.15 then -- 2 tun bc ac
+						void = (webb and webc) or (weba and webc)
+					elseif n_biome < -0.05 then -- 1 fis 1 tun
+						void = webb or (weba and webc)
+					elseif n_biome < 0.05 then -- 2 fis
 						void = weba or webb
-					elseif n_biome < 0.3 then -- 1 fis 1 tun
+					elseif n_biome < 0.15 then -- 1 fis 1 tun
 						void = weba or (webb and webc)
-					elseif n_biome < 0.5 then -- 2 tun ab bc
-						void = (weba and webb) or (webb and webc)
-					elseif n_biome < 0.7 then -- 2 tun ab ac
-						void = (weba and webb) or (weba and webc)
+					elseif n_biome < 0.4 then -- 2 tun 
+						void = (weba and webc) or (webb and webc)
+					elseif n_biome < 0.65 then -- 2 tun 
+						void = (weba and webc) or (webb and webc)
 					else -- 2 tun bc ac
 						void = (webb and webc) or (weba and webc)
 					end
 					if void then
 						data[vi] = c_air
 						cavbel[ti] = 1
+						if nodid == c_tree or nodid == c_jtree then
+							for j = -12, 12 do
+								local vit = area:index(x, y+j, z)
+								if data[vit] == c_tree or data[vit] == c_jtree then
+									data[vit] = c_air
+								end
+							end
+						end
 					else
 						cavbel[ti] = 0
 					end
 				else
-					if (nodida == c_water or watadj) and cavbel[ti] == 1 then
+					if (nodid == c_water or watadj) and cavbel[ti] == 1 then
 						for j = -1, -16, -1 do
 							local vip = area:index(x, y+j, z)
 							if data[vip] == c_air then
@@ -150,6 +168,8 @@ minetest.register_on_generated(function(minp, maxp, seed)
 				via = via + 1
 				vin = vin + 1
 				vis = vis + 1
+				vie = vie + 1
+				viw = viw + 1
 			end
 		end
 	end
