@@ -1,11 +1,20 @@
--- intersecting 0.2.1 by paramat
+-- intersecting 0.2.2 by paramat
 -- For latest stable Minetest and back to 0.4.8
 -- Depends default
 -- License: code WTFPL
 
+-- stable sand, drops default
+-- luxore in stone, above stone, craftable to lights
+
+-- TODO
+-- integrate caves as cava = math.abs(n_weba) > CAVT
+-- include lava, to replace v6 cavegen
+
 -- Parameters
 
-local TFIS = 0.02 -- fissure and tunnel width
+local TFIS = 0.02 -- Fissure and tunnel width
+local LUX = true -- Enable luxore
+local LUXCHA = 1 / 8 ^ 3 -- Luxore chance per stone node.
 
 -- 3D noise for fissure a
 
@@ -55,6 +64,73 @@ local np_biome = {
 
 intersecting = {}
 
+-- Nodes
+
+minetest.register_node("intersecting:sand", {
+	description = "Stable sand",
+	tiles = {"default_sand.png"},
+	is_ground_content = false,
+	groups = {crumbly=2, sand=1},
+	drop = "default:sand",
+	sounds = default.node_sound_sand_defaults(),
+})
+
+minetest.register_node("intersecting:luxoff", {
+	description = "Dark Lux Ore",
+	tiles = {"intersecting_luxore.png"},
+	light_source = 14,
+	groups = {cracky=3},
+	sounds = default.node_sound_glass_defaults(),
+})
+
+minetest.register_node("intersecting:luxore", {
+	description = "Lux Ore",
+	tiles = {"intersecting_luxore.png"},
+	light_source = 14,
+	groups = {cracky=3},
+	sounds = default.node_sound_glass_defaults(),
+})
+
+minetest.register_node("intersecting:light", {
+	description = "Light",
+	tiles = {"intersecting_light.png"},
+	light_source = 14,
+	groups = {cracky=3,oddly_breakable_by_hand=3},
+	sounds = default.node_sound_glass_defaults(),
+})
+
+-- Crafting.
+
+minetest.register_craft({
+    output = "intersecting:light 8",
+    recipe = {
+        {"default:glass", "default:glass", "default:glass"},
+        {"default:glass", "intersecting:luxore", "default:glass"},
+        {"default:glass", "default:glass", "default:glass"},
+    },
+})
+
+minetest.register_craft({
+    output = "intersecting:light 8",
+    recipe = {
+        {"default:obsidian_glass", "default:obsidian_glass", "default:obsidian_glass"},
+        {"default:obsidian_glass", "intersecting:luxore", "default:obsidian_glass"},
+        {"default:obsidian_glass", "default:obsidian_glass", "default:obsidian_glass"},
+    },
+})
+
+-- ABM spread luxore light
+
+minetest.register_abm({
+	nodenames = {"intersecting:luxoff"},
+	interval = 7,
+	chance = 1,
+	action = function(pos, node)
+		minetest.remove_node(pos)
+		minetest.place_node(pos, {name="intersecting:luxore"})
+	end,
+})
+
 -- On generated function
 
 minetest.register_on_generated(function(minp, maxp, seed)
@@ -78,12 +154,16 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	
 	local c_air = minetest.get_content_id("air")
 	local c_water = minetest.get_content_id("default:water_source")
-	local c_sand = minetest.get_content_id("default:sand")
 	local c_dirt = minetest.get_content_id("default:dirt")
 	local c_grass = minetest.get_content_id("default:dirt_with_grass")
 	local c_tree = minetest.get_content_id("default:tree")
 	local c_jtree = minetest.get_content_id("default:jungletree")
+	local c_stone = minetest.get_content_id("default:stone")
+	local c_desertstone = minetest.get_content_id("default:desert_stone")
 	
+	local c_sand = minetest.get_content_id("intersecting:sand")
+	local c_luxore = minetest.get_content_id("intersecting:luxoff")
+
 	local sidelen = x1 - x0 + 1
 	local chulens = {x=sidelen, y=sidelen, z=sidelen}
 	local minposxyz = {x=x0, y=y0, z=z0}
@@ -94,6 +174,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	local nvals_biome = minetest.get_perlin_map(np_biome, chulens):get3dMap_flat(minposxyz)
 	
 	local cavbel = {}
+	local stobel = {}
 	local nixyz = 1
 	for z = z0, z1 do -- for each xy plane progressing northwards
 		for y = y0, y1 do -- for each x row progressing upwards
@@ -141,6 +222,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 					if void then
 						data[vi] = c_air
 						cavbel[ti] = 1
+						stobel[ti] = 0
 						if nodid == c_tree or nodid == c_jtree then
 							for j = -12, 12 do
 								local vit = area:index(x, y+j, z)
@@ -151,6 +233,12 @@ minetest.register_on_generated(function(minp, maxp, seed)
 						end
 					else
 						cavbel[ti] = 0
+						if LUX and nodid == c_stone or nodid == c_desertstone then
+							if math.random() < LUXCHA and stobel[ti] == 1 and y > y0 then
+								data[vi] = c_luxore
+							end
+							stobel[ti] = 1
+						end
 					end
 				else
 					if (nodid == c_water or watadj) and cavbel[ti] == 1 then
@@ -162,6 +250,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 						end
 					end
 					cavbel[ti] = 0
+					stobel[ti] = 0
 				end
 				nixyz = nixyz + 1
 				vi = vi + 1
