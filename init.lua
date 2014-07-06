@@ -1,19 +1,13 @@
--- intersecting 0.2.3 by paramat
+-- intersecting 0.3.0 by paramat
 -- For latest stable Minetest and back to 0.4.8
 -- Depends default
 -- License: code WTFPL
-
--- stone water plugs
--- luxore abm optional
-
--- TODO
--- include lava, to replace v6 cavegen, lava as tunnels intersecting lava caves?
 
 -- Parameters
 
 local TFIS = 0.02 -- Fissure and tunnel width
 local LUX = true -- Enable luxore
-local LUXCHA = 1 / 9 ^ 3 -- Luxore chance per stone node.
+local LUXCHA = 1 / 11 ^ 3 -- Luxore chance per stone node.
 
 -- 3D noise for fissure a
 
@@ -48,15 +42,15 @@ local np_webc = {
 	persist = 0.5
 }
 
--- 3D noise for tunnel/fissure combinations
+-- 3D noise for fissure d
 
-local np_biome = {
+local np_webd = {
 	offset = 0,
 	scale = 1,
-	spread = {x=2048, y=2048, z=2048},
+	spread = {x=189, y=189, z=189},
 	seed = -181,
-	octaves = 1,
-	persist = 0
+	octaves = 3,
+	persist = 0.5
 }
 
 -- Stuff
@@ -147,6 +141,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	local c_air = minetest.get_content_id("air")
 	local c_water = minetest.get_content_id("default:water_source")
 	local c_dirt = minetest.get_content_id("default:dirt")
+	local c_lava = minetest.get_content_id("default:lava_source")
 	local c_grass = minetest.get_content_id("default:dirt_with_grass")
 	local c_tree = minetest.get_content_id("default:tree")
 	local c_jtree = minetest.get_content_id("default:jungletree")
@@ -162,13 +157,14 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	local nvals_weba = minetest.get_perlin_map(np_weba, chulens):get3dMap_flat(minposxyz)
 	local nvals_webb = minetest.get_perlin_map(np_webb, chulens):get3dMap_flat(minposxyz)
 	local nvals_webc = minetest.get_perlin_map(np_webc, chulens):get3dMap_flat(minposxyz)
-	local nvals_biome = minetest.get_perlin_map(np_biome, chulens):get3dMap_flat(minposxyz)
+	local nvals_webd = minetest.get_perlin_map(np_webd, chulens):get3dMap_flat(minposxyz)
 	
 	local cavbel = {}
 	local stobel = {}
 	local nixyz = 1
 	for z = z0, z1 do -- for each xy plane progressing northwards
 		for y = y0, y1 do -- for each x row progressing upwards
+			local ti = 1
 			local vi = area:index(x0, y, z)
 			local via = area:index(x0, y+1, z)
 			local vin = area:index(x0, y, z+1)
@@ -176,45 +172,42 @@ minetest.register_on_generated(function(minp, maxp, seed)
 			local vie = vi + 1
 			local viw = vi - 1
 			for x = x0, x1 do -- for each node do
-				local ti = x - x0 + 1
 				local nodid = data[vi]
 				local nodida = data[via]
 				local nodide = data[vie]
 				local nodidw = data[viw]
 				local nodidn = data[vin]
 				local nodids = data[vis]
-				local watadj = nodida == c_water or nodidw == c_water or nodide == c_water or nodidn == c_water or nodids == c_water
-				if nodid ~= c_air and nodid ~= c_water and not watadj
-				and not ((nodid == c_sand or nodid == c_dirt or nodid == c_grass) and y <= 2) then
-					local weba = math.abs(nvals_weba[nixyz]) < TFIS
+				local watadj = nodida == c_water
+				or nodidw == c_water or nodide == c_water or nodidn == c_water or nodids == c_water
+				local surfmat = (nodid == c_sand or nodid == c_dirt or nodid == c_grass) and y <= 2
+				if nodid ~= c_air then
+					local weba = math.abs(nvals_weba[nixyz]) < TFIS -- solid or liquid
 					local webb = math.abs(nvals_webb[nixyz]) < TFIS
 					local webc = math.abs(nvals_webc[nixyz]) < TFIS
-					local n_biome = nvals_biome[nixyz]
-					local void
-					if n_biome < -0.65 then -- 2 tun ac ab
-						void = (weba and webc) or (weba and webb)
-					elseif n_biome < -0.4 then -- 2 tun bc ab
-						void = (webb and webc) or (weba and webb)
-					elseif n_biome < -0.15 then -- 2 tun bc ac
-						void = (webb and webc) or (weba and webc)
-					elseif n_biome < -0.05 then -- 1 fis 1 tun
-						void = webb or (weba and webc)
-					elseif n_biome < 0.05 then -- 2 fis
-						void = weba or webb
-					elseif n_biome < 0.15 then -- 1 fis 1 tun
-						void = weba or (webb and webc)
-					elseif n_biome < 0.4 then -- 2 tun 
-						void = (weba and webc) or (webb and webc)
-					elseif n_biome < 0.65 then -- 2 tun 
-						void = (weba and webc) or (webb and webc)
-					else -- 2 tun bc ac
-						void = (webb and webc) or (weba and webc)
-					end
-					if void then
-						data[vi] = c_air
+					local webd = math.abs(nvals_webd[nixyz]) < TFIS
+					local tunnel = (weba and webb) or (webb and webc) or (webc and webd)
+					local magma = webc and webd
+					if tunnel then
 						cavbel[ti] = 1
 						stobel[ti] = 0
-						if nodid == c_tree or nodid == c_jtree then
+						if magma then -- magma tunnel
+							if y <= 1 then
+								data[vi] = c_lava
+							else
+								data[vi] = c_air
+							end
+						elseif (nodid == c_water or watadj) and cavbel[ti] == 1 then
+							for j = -1, -16, -1 do -- water plug
+								local vip = area:index(x, y+j, z)
+								if data[vip] == c_air then
+									data[vip] = c_stone
+								end
+							end
+						elseif nodid ~= c_water and not surfmat and not watadj then
+							data[vi] = c_air -- tunnel
+						end
+						if nodid == c_tree or nodid == c_jtree then -- if trunk cut remove whole trunk
 							for j = -12, 12 do
 								local vit = area:index(x, y+j, z)
 								if data[vit] == c_tree or data[vit] == c_jtree then
@@ -222,28 +215,23 @@ minetest.register_on_generated(function(minp, maxp, seed)
 								end
 							end
 						end
-					else
+					else -- solid or liquid
 						cavbel[ti] = 0
-						if LUX and nodid == c_stone or nodid == c_desertstone then
-							if math.random() < LUXCHA and stobel[ti] == 1 and y > y0 then
-								data[vi] = c_luxore
-							end
+						if nodid == c_stone or nodid == c_desertstone then
 							stobel[ti] = 1
-						end
-					end
-				else
-					if (nodid == c_water or watadj) and cavbel[ti] == 1 then
-						for j = -1, -16, -1 do
-							local vip = area:index(x, y+j, z)
-							if data[vip] == c_air then
-								data[vip] = c_stone
+							if LUX then
+								if math.random() < LUXCHA and stobel[ti] == 1 and y > y0 then
+									data[vi] = c_luxore
+								end
 							end
 						end
 					end
+				else -- nodid == c_air
 					cavbel[ti] = 0
 					stobel[ti] = 0
 				end
 				nixyz = nixyz + 1
+				ti = ti + 1
 				vi = vi + 1
 				via = via + 1
 				vin = vin + 1
