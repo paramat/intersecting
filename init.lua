@@ -1,20 +1,19 @@
--- intersecting 0.2.2 by paramat
+-- intersecting 0.2.3 by paramat
 -- For latest stable Minetest and back to 0.4.8
 -- Depends default
 -- License: code WTFPL
 
--- stable sand, drops default
--- luxore in stone, above stone, craftable to lights
+-- stone water plugs
+-- luxore abm optional
 
 -- TODO
--- integrate caves as cava = math.abs(n_weba) > CAVT
--- include lava, to replace v6 cavegen
+-- include lava, to replace v6 cavegen, lava as tunnels intersecting lava caves?
 
 -- Parameters
 
 local TFIS = 0.02 -- Fissure and tunnel width
 local LUX = true -- Enable luxore
-local LUXCHA = 1 / 8 ^ 3 -- Luxore chance per stone node.
+local LUXCHA = 1 / 9 ^ 3 -- Luxore chance per stone node.
 
 -- 3D noise for fissure a
 
@@ -66,15 +65,6 @@ intersecting = {}
 
 -- Nodes
 
-minetest.register_node("intersecting:sand", {
-	description = "Stable sand",
-	tiles = {"default_sand.png"},
-	is_ground_content = false,
-	groups = {crumbly=2, sand=1},
-	drop = "default:sand",
-	sounds = default.node_sound_sand_defaults(),
-})
-
 minetest.register_node("intersecting:luxoff", {
 	description = "Dark Lux Ore",
 	tiles = {"intersecting_luxore.png"},
@@ -121,15 +111,17 @@ minetest.register_craft({
 
 -- ABM spread luxore light
 
-minetest.register_abm({
-	nodenames = {"intersecting:luxoff"},
-	interval = 7,
-	chance = 1,
-	action = function(pos, node)
-		minetest.remove_node(pos)
-		minetest.place_node(pos, {name="intersecting:luxore"})
-	end,
-})
+if LUX then
+	minetest.register_abm({
+		nodenames = {"intersecting:luxoff"},
+		interval = 7,
+		chance = 1,
+		action = function(pos, node)
+			minetest.remove_node(pos)
+			minetest.place_node(pos, {name="intersecting:luxore"})
+		end,
+	})
+end
 
 -- On generated function
 
@@ -161,7 +153,6 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	local c_stone = minetest.get_content_id("default:stone")
 	local c_desertstone = minetest.get_content_id("default:desert_stone")
 	
-	local c_sand = minetest.get_content_id("intersecting:sand")
 	local c_luxore = minetest.get_content_id("intersecting:luxoff")
 
 	local sidelen = x1 - x0 + 1
@@ -201,7 +192,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 					local n_biome = nvals_biome[nixyz]
 					local void
 					if n_biome < -0.65 then -- 2 tun ac ab
-						void = (weba and webc) or (weba and webb) 
+						void = (weba and webc) or (weba and webb)
 					elseif n_biome < -0.4 then -- 2 tun bc ab
 						void = (webb and webc) or (weba and webb)
 					elseif n_biome < -0.15 then -- 2 tun bc ac
@@ -245,7 +236,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 						for j = -1, -16, -1 do
 							local vip = area:index(x, y+j, z)
 							if data[vip] == c_air then
-								data[vip] = c_sand
+								data[vip] = c_stone
 							end
 						end
 					end
@@ -267,6 +258,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	vm:set_lighting({day=0, night=0})
 	vm:calc_lighting()
 	vm:write_to_map(data)
+
 	local chugent = math.ceil((os.clock() - t1) * 1000)
 	print ("[intersecting] "..chugent.." ms")
 end)
