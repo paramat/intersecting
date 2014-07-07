@@ -1,7 +1,11 @@
--- intersecting 0.3.0 by paramat
+-- intersecting 0.3.1 by paramat
 -- For latest stable Minetest and back to 0.4.8
 -- Depends default
 -- License: code WTFPL
+
+-- 4 3D noises: 2 tunnel systems + 1 magma system 
+-- biomes rotate noises, create dead ends
+-- bugfixes
 
 -- Parameters
 
@@ -51,6 +55,17 @@ local np_webd = {
 	seed = -181,
 	octaves = 3,
 	persist = 0.5
+}
+
+-- 3D noise for biomes
+
+local np_biome = {
+	offset = 0,
+	scale = 1,
+	spread = {x=384, y=384, z=384},
+	seed = 89114,
+	octaves = 1,
+	persist = 0
 }
 
 -- Stuff
@@ -158,6 +173,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	local nvals_webb = minetest.get_perlin_map(np_webb, chulens):get3dMap_flat(minposxyz)
 	local nvals_webc = minetest.get_perlin_map(np_webc, chulens):get3dMap_flat(minposxyz)
 	local nvals_webd = minetest.get_perlin_map(np_webd, chulens):get3dMap_flat(minposxyz)
+	local nvals_biome = minetest.get_perlin_map(np_biome, chulens):get3dMap_flat(minposxyz)
 	
 	local cavbel = {}
 	local stobel = {}
@@ -182,21 +198,32 @@ minetest.register_on_generated(function(minp, maxp, seed)
 				or nodidw == c_water or nodide == c_water or nodidn == c_water or nodids == c_water
 				local surfmat = (nodid == c_sand or nodid == c_dirt or nodid == c_grass) and y <= 2
 				if nodid ~= c_air then
-					local weba = math.abs(nvals_weba[nixyz]) < TFIS -- solid or liquid
+					local weba = math.abs(nvals_weba[nixyz]) < TFIS
 					local webb = math.abs(nvals_webb[nixyz]) < TFIS
 					local webc = math.abs(nvals_webc[nixyz]) < TFIS
 					local webd = math.abs(nvals_webd[nixyz]) < TFIS
-					local tunnel = (weba and webb) or (webb and webc) or (webc and webd)
-					local magma = webc and webd
-					if tunnel then
-						cavbel[ti] = 1
-						stobel[ti] = 0
+					local n_biome = nvals_biome[nixyz]
+					local tunnel
+					local magma
+					if n_biome < -0.3 then
+						tunnel = (weba and webb) or (webb and webc)
+						magma = (webc and webd)
+					elseif n_biome < 0.3 then
+						tunnel = (webb and webc) or (weba and webc)
+						magma = (webc and webd)
+					else
+						tunnel = (weba and webc) or (weba and webb)
+						magma = (webc and webd)
+					end
+					if tunnel or magma then
 						if magma then -- magma tunnel
 							if y <= 1 then
 								data[vi] = c_lava
 							else
 								data[vi] = c_air
 							end
+							cavbel[ti] = 1
+							stobel[ti] = 0
 						elseif (nodid == c_water or watadj) and cavbel[ti] == 1 then
 							for j = -1, -16, -1 do -- water plug
 								local vip = area:index(x, y+j, z)
@@ -204,8 +231,12 @@ minetest.register_on_generated(function(minp, maxp, seed)
 									data[vip] = c_stone
 								end
 							end
+							cavbel[ti] = 0
+							stobel[ti] = 0
 						elseif nodid ~= c_water and not surfmat and not watadj then
 							data[vi] = c_air -- tunnel
+							cavbel[ti] = 1
+							stobel[ti] = 0
 						end
 						if nodid == c_tree or nodid == c_jtree then -- if trunk cut remove whole trunk
 							for j = -12, 12 do
@@ -218,12 +249,12 @@ minetest.register_on_generated(function(minp, maxp, seed)
 					else -- solid or liquid
 						cavbel[ti] = 0
 						if nodid == c_stone or nodid == c_desertstone then
-							stobel[ti] = 1
 							if LUX then
 								if math.random() < LUXCHA and stobel[ti] == 1 and y > y0 then
 									data[vi] = c_luxore
 								end
 							end
+							stobel[ti] = 1
 						end
 					end
 				else -- nodid == c_air
