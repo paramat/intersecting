@@ -1,19 +1,16 @@
--- intersecting 0.3.1 by paramat
+-- intersecting 0.3.2 by paramat
 -- For latest stable Minetest and back to 0.4.8
 -- Depends default
 -- License: code WTFPL
 
--- 4 3D noises: 2 tunnel systems + 1 magma system 
--- biomes rotate noises, create dead ends
--- bugfixes
-
 -- Parameters
 
-local TFIS = 0.02 -- Fissure and tunnel width
+local TTUN = 0.02 -- Tunnel width
+local TMAG = 0.01 -- Magma channel width
 local LUX = true -- Enable luxore
-local LUXCHA = 1 / 11 ^ 3 -- Luxore chance per stone node.
+local LUXCHA = 1 / 9 ^ 3 -- Luxore chance per stone node.
 
--- 3D noise for fissure a
+-- 3D noise a
 
 local np_weba = {
 	offset = 0,
@@ -24,7 +21,7 @@ local np_weba = {
 	persist = 0.5
 }
 
--- 3D noise for fissure b
+-- 3D noise b
 
 local np_webb = {
 	offset = 0,
@@ -35,7 +32,7 @@ local np_webb = {
 	persist = 0.5
 }
 
--- 3D noise for fissure c
+-- 3D noise c
 
 local np_webc = {
 	offset = 0,
@@ -46,15 +43,26 @@ local np_webc = {
 	persist = 0.5
 }
 
--- 3D noise for fissure d
+-- 3D noise d
 
 local np_webd = {
 	offset = 0,
 	scale = 1,
-	spread = {x=189, y=189, z=189},
+	spread = {x=384, y=384, z=384},
 	seed = -181,
 	octaves = 3,
-	persist = 0.5
+	persist = 0.4
+}
+
+-- 3D noise e
+
+local np_webe = {
+	offset = 0,
+	scale = 1,
+	spread = {x=383, y=383, z=383},
+	seed = 1022081,
+	octaves = 3,
+	persist = 0.4
 }
 
 -- 3D noise for biomes
@@ -173,6 +181,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	local nvals_webb = minetest.get_perlin_map(np_webb, chulens):get3dMap_flat(minposxyz)
 	local nvals_webc = minetest.get_perlin_map(np_webc, chulens):get3dMap_flat(minposxyz)
 	local nvals_webd = minetest.get_perlin_map(np_webd, chulens):get3dMap_flat(minposxyz)
+	local nvals_webe = minetest.get_perlin_map(np_webe, chulens):get3dMap_flat(minposxyz)
 	local nvals_biome = minetest.get_perlin_map(np_biome, chulens):get3dMap_flat(minposxyz)
 	
 	local cavbel = {}
@@ -198,24 +207,22 @@ minetest.register_on_generated(function(minp, maxp, seed)
 				or nodidw == c_water or nodide == c_water or nodidn == c_water or nodids == c_water
 				local surfmat = (nodid == c_sand or nodid == c_dirt or nodid == c_grass) and y <= 2
 				if nodid ~= c_air then
-					local weba = math.abs(nvals_weba[nixyz]) < TFIS
-					local webb = math.abs(nvals_webb[nixyz]) < TFIS
-					local webc = math.abs(nvals_webc[nixyz]) < TFIS
-					local webd = math.abs(nvals_webd[nixyz]) < TFIS
+					local weba = math.abs(nvals_weba[nixyz]) < TTUN
+					local webb = math.abs(nvals_webb[nixyz]) < TTUN
+					local webc = math.abs(nvals_webc[nixyz]) < TTUN
+					local webd = math.abs(nvals_webd[nixyz]) < TMAG
+					local webe = math.abs(nvals_webe[nixyz]) < TMAG
 					local n_biome = nvals_biome[nixyz]
-					local tunnel
-					local magma
+					local void
+					local magma = webd and webe
 					if n_biome < -0.3 then
-						tunnel = (weba and webb) or (webb and webc)
-						magma = (webc and webd)
+						void = (weba and webb) or (webb and webc)
 					elseif n_biome < 0.3 then
-						tunnel = (webb and webc) or (weba and webc)
-						magma = (webc and webd)
+						void = (webb and webc) or (weba and webc)
 					else
-						tunnel = (weba and webc) or (weba and webb)
-						magma = (webc and webd)
+						void = (weba and webc) or (weba and webb)
 					end
-					if tunnel or magma then
+					if void or magma then
 						if magma then -- magma tunnel
 							if y <= 1 then
 								data[vi] = c_lava
