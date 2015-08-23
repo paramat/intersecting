@@ -1,8 +1,3 @@
--- intersecting 0.3.2 by paramat
--- For latest stable Minetest and back to 0.4.8
--- Depends default
--- License: code WTFPL
-
 -- Parameters
 
 local TTUN = 0.02 -- Tunnel width
@@ -15,7 +10,7 @@ local LUXCHA = 1 / 9 ^ 3 -- Luxore chance per stone node.
 local np_weba = {
 	offset = 0,
 	scale = 1,
-	spread = {x=192, y=192, z=192},
+	spread = {x = 192, y = 192, z = 192},
 	seed = 5900033,
 	octaves = 3,
 	persist = 0.5
@@ -26,7 +21,7 @@ local np_weba = {
 local np_webb = {
 	offset = 0,
 	scale = 1,
-	spread = {x=191, y=191, z=191},
+	spread = {x = 191, y = 191, z = 191},
 	seed = 33,
 	octaves = 3,
 	persist = 0.5
@@ -37,7 +32,7 @@ local np_webb = {
 local np_webc = {
 	offset = 0,
 	scale = 1,
-	spread = {x=190, y=190, z=190},
+	spread = {x = 190, y = 190, z = 190},
 	seed = -18000001,
 	octaves = 3,
 	persist = 0.5
@@ -48,7 +43,7 @@ local np_webc = {
 local np_webd = {
 	offset = 0,
 	scale = 1,
-	spread = {x=384, y=384, z=384},
+	spread = {x = 384, y = 384, z = 384},
 	seed = -181,
 	octaves = 3,
 	persist = 0.4
@@ -59,7 +54,7 @@ local np_webd = {
 local np_webe = {
 	offset = 0,
 	scale = 1,
-	spread = {x=383, y=383, z=383},
+	spread = {x = 383, y = 383, z = 383},
 	seed = 1022081,
 	octaves = 3,
 	persist = 0.4
@@ -70,39 +65,29 @@ local np_webe = {
 local np_biome = {
 	offset = 0,
 	scale = 1,
-	spread = {x=384, y=384, z=384},
+	spread = {x = 384, y = 384, z = 384},
 	seed = 89114,
 	octaves = 1,
 	persist = 0
 }
 
--- Stuff
-
-intersecting = {}
-
 -- Nodes
-
-minetest.register_node("intersecting:luxoff", {
-	description = "Dark Lux Ore",
-	tiles = {"intersecting_luxore.png"},
-	light_source = 14,
-	groups = {cracky=3},
-	sounds = default.node_sound_glass_defaults(),
-})
 
 minetest.register_node("intersecting:luxore", {
 	description = "Lux Ore",
 	tiles = {"intersecting_luxore.png"},
+	paramtype = "light",
 	light_source = 14,
-	groups = {cracky=3},
+	groups = {cracky = 3},
 	sounds = default.node_sound_glass_defaults(),
 })
 
 minetest.register_node("intersecting:light", {
 	description = "Light",
 	tiles = {"intersecting_light.png"},
+	paramtype = "light",
 	light_source = 14,
-	groups = {cracky=3,oddly_breakable_by_hand=3},
+	groups = {cracky = 3, oddly_breakable_by_hand = 3},
 	sounds = default.node_sound_glass_defaults(),
 })
 
@@ -126,19 +111,14 @@ minetest.register_craft({
     },
 })
 
--- ABM spread luxore light
+-- Initialize noise objects to nil
 
-if LUX then
-	minetest.register_abm({
-		nodenames = {"intersecting:luxoff"},
-		interval = 7,
-		chance = 1,
-		action = function(pos, node)
-			minetest.remove_node(pos)
-			minetest.place_node(pos, {name="intersecting:luxore"})
-		end,
-	})
-end
+local nobj_weba = nil
+local nobj_webb = nil
+local nobj_webc = nil
+local nobj_webd = nil
+local nobj_webe = nil
+local nobj_biome = nil
 
 -- On generated function
 
@@ -155,57 +135,69 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	local y0 = minp.y
 	local z0 = minp.z
 	
-	print ("[intersecting] chunk minp ("..x0.." "..y0.." "..z0..")")
-	
 	local vm, emin, emax = minetest.get_mapgen_object("voxelmanip")
-	local area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
+	local area = VoxelArea:new{MinEdge = emin, MaxEdge = emax}
 	local data = vm:get_data()
 	
 	local c_air = minetest.get_content_id("air")
 	local c_water = minetest.get_content_id("default:water_source")
 	local c_dirt = minetest.get_content_id("default:dirt")
+	local c_sand = minetest.get_content_id("default:sand")
 	local c_lava = minetest.get_content_id("default:lava_source")
 	local c_grass = minetest.get_content_id("default:dirt_with_grass")
 	local c_tree = minetest.get_content_id("default:tree")
 	local c_jtree = minetest.get_content_id("default:jungletree")
 	local c_stone = minetest.get_content_id("default:stone")
 	local c_desertstone = minetest.get_content_id("default:desert_stone")
-	
-	local c_luxore = minetest.get_content_id("intersecting:luxoff")
+	local c_sandstone = minetest.get_content_id("default:sandstone")
+	local c_luxore = minetest.get_content_id("intersecting:luxore")
 
 	local sidelen = x1 - x0 + 1
-	local chulens = {x=sidelen, y=sidelen, z=sidelen}
-	local minposxyz = {x=x0, y=y0, z=z0}
+	local emerlen = sidelen + 32
+	local emerarea = emerlen ^ 2
+	local chulens = {x = sidelen, y = sidelen, z = sidelen}
+	local minposxyz = {x = x0, y = y0, z = z0}
 	
-	local nvals_weba = minetest.get_perlin_map(np_weba, chulens):get3dMap_flat(minposxyz)
-	local nvals_webb = minetest.get_perlin_map(np_webb, chulens):get3dMap_flat(minposxyz)
-	local nvals_webc = minetest.get_perlin_map(np_webc, chulens):get3dMap_flat(minposxyz)
-	local nvals_webd = minetest.get_perlin_map(np_webd, chulens):get3dMap_flat(minposxyz)
-	local nvals_webe = minetest.get_perlin_map(np_webe, chulens):get3dMap_flat(minposxyz)
-	local nvals_biome = minetest.get_perlin_map(np_biome, chulens):get3dMap_flat(minposxyz)
+	nobj_weba = nobj_weba or minetest.get_perlin_map(np_weba, chulens)
+	nobj_webb = nobj_webb or minetest.get_perlin_map(np_webb, chulens)
+	nobj_webc = nobj_webc or minetest.get_perlin_map(np_webc, chulens)
+	nobj_webd = nobj_webd or minetest.get_perlin_map(np_webd, chulens)
+	nobj_webe = nobj_webe or minetest.get_perlin_map(np_webe, chulens)
+	nobj_biome = nobj_biome or minetest.get_perlin_map(np_biome, chulens)
+	
+	local nvals_weba = nobj_weba:get3dMap_flat(minposxyz)
+	local nvals_webb = nobj_webb:get3dMap_flat(minposxyz)
+	local nvals_webc = nobj_webc:get3dMap_flat(minposxyz)
+	local nvals_webd = nobj_webd:get3dMap_flat(minposxyz)
+	local nvals_webe = nobj_webe:get3dMap_flat(minposxyz)
+	local nvals_biome = nobj_biome:get3dMap_flat(minposxyz)
 	
 	local cavbel = {}
-	local stobel = {}
+	--local stobel = {}
 	local nixyz = 1
 	for z = z0, z1 do -- for each xy plane progressing northwards
 		for y = y0, y1 do -- for each x row progressing upwards
 			local ti = 1
 			local vi = area:index(x0, y, z)
-			local via = area:index(x0, y+1, z)
-			local vin = area:index(x0, y, z+1)
-			local vis = area:index(x0, y, z-1)
+			local via = vi + emerlen
+			local vin = vi + emerarea
+			local vis = vi - emerarea
 			local vie = vi + 1
 			local viw = vi - 1
-			for x = x0, x1 do -- for each node do
+			for x = x0, x1 do -- for each node progressing eastwards
 				local nodid = data[vi]
 				local nodida = data[via]
 				local nodide = data[vie]
 				local nodidw = data[viw]
 				local nodidn = data[vin]
 				local nodids = data[vis]
+				-- water adjacent
 				local watadj = nodida == c_water
-				or nodidw == c_water or nodide == c_water or nodidn == c_water or nodids == c_water
-				local surfmat = (nodid == c_sand or nodid == c_dirt or nodid == c_grass) and y <= 2
+					or nodidw == c_water or nodide == c_water
+					or nodidn == c_water or nodids == c_water
+				-- lakebed material
+				local surfmat = (nodid == c_sand or nodid == c_dirt
+					or nodid == c_grass) and y <= 2
 				if nodid ~= c_air then
 					local weba = math.abs(nvals_weba[nixyz]) < TTUN
 					local webb = math.abs(nvals_webb[nixyz]) < TTUN
@@ -230,24 +222,25 @@ minetest.register_on_generated(function(minp, maxp, seed)
 								data[vi] = c_air
 							end
 							cavbel[ti] = 1
-							stobel[ti] = 0
+							--stobel[ti] = 0
 						elseif (nodid == c_water or watadj) and cavbel[ti] == 1 then
 							for j = -1, -16, -1 do -- water plug
-								local vip = area:index(x, y+j, z)
+								local vip = area:index(x, y + j, z)
 								if data[vip] == c_air then
 									data[vip] = c_stone
 								end
 							end
 							cavbel[ti] = 0
-							stobel[ti] = 0
+							--stobel[ti] = 0
 						elseif nodid ~= c_water and not surfmat and not watadj then
 							data[vi] = c_air -- tunnel
 							cavbel[ti] = 1
-							stobel[ti] = 0
+							--stobel[ti] = 0
 						end
-						if nodid == c_tree or nodid == c_jtree then -- if trunk cut remove whole trunk
+						-- if trunk cut remove whole trunk
+						if nodid == c_tree or nodid == c_jtree then
 							for j = -12, 12 do
-								local vit = area:index(x, y+j, z)
+								local vit = area:index(x, y + j, z)
 								if data[vit] == c_tree or data[vit] == c_jtree then
 									data[vit] = c_air
 								end
@@ -255,18 +248,19 @@ minetest.register_on_generated(function(minp, maxp, seed)
 						end
 					else -- solid or liquid
 						cavbel[ti] = 0
-						if nodid == c_stone or nodid == c_desertstone then
+						if nodid == c_stone or nodid == c_desertstone
+								or nodid == c_sandstone then
 							if LUX then
-								if math.random() < LUXCHA and stobel[ti] == 1 and y > y0 then
+								if math.random() < LUXCHA then
 									data[vi] = c_luxore
 								end
 							end
-							stobel[ti] = 1
+							--stobel[ti] = 1
 						end
 					end
 				else -- nodid == c_air
 					cavbel[ti] = 0
-					stobel[ti] = 0
+					--stobel[ti] = 0
 				end
 				nixyz = nixyz + 1
 				ti = ti + 1
@@ -281,10 +275,10 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	end
 	
 	vm:set_data(data)
-	vm:set_lighting({day=0, night=0})
+	vm:set_lighting({day = 0, night = 0})
 	vm:calc_lighting()
 	vm:write_to_map(data)
 
 	local chugent = math.ceil((os.clock() - t1) * 1000)
-	print ("[intersecting] "..chugent.." ms")
+	print ("[intersecting] " .. chugent .. " ms")
 end)
